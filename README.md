@@ -1,6 +1,6 @@
 # dizzy WIP
 
-Zig diffing from the ground up.
+Zig diffing from the ground up with Myers' algorithm for discovering shortest edit scripts.
 
 ## Mental Model for Myers Diff
 

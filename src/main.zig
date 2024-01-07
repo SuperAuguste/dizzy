@@ -1,83 +1,113 @@
 const std = @import("std");
 
-// Caller asserts that the scratch buffer `diagonal_lines_best_xs` must be at least (2 * (a.len + b.len) + 1) long
-// Caller asserts that a and b are not both of length 0
-pub fn calculateShortestEditDistance(
-    comptime T: type,
-    a: []const T,
-    b: []const T,
-    diagonal_lines_best_xs: []usize,
-) usize {
-    std.debug.assert(a.len != 0 or b.len != 0);
-
-    const max_depth = a.len + b.len;
-    // Number of diagonals, both positive or negative (some are off the board)
-    const required_scratch_len = 2 * max_depth + 1;
-    // -max_depth ... max_depth (0 is included, which is why the + 1 is present)
-    std.debug.assert(diagonal_lines_best_xs.len >= required_scratch_len);
-
-    if (std.debug.runtime_safety) {
-        @memset(diagonal_lines_best_xs[0..required_scratch_len], undefined);
-    }
-
-    // Zig does not have signed indices for slices, so we just used unsigned integers
-    // For example, if max_depth = 2 and I want to get diagonal_lines_best_xs[-1], I would
-    // do diagonal_lines_best_xs[max_depth - 1], and likewise if I want diagonal_lines_best_xs[1]
-    // I would do diagonal_lines_best_xs[max_depth + 1].
-
-    // Called to create valid case for first move which is off the board.
-    diagonal_lines_best_xs[max_depth + 1] = 0;
-
-    // Our long-term objective is for whatever move we perform
-    // to move towards the bottom right of the board. Our short-term
-    // objective is for every move to move towards the current diagonal.
-
-    for (0..max_depth + 1) |depth| {
-        // -max_depth, -max_depth + 2 ... max_depth - 2, max_depth
-        var diagonal: usize = max_depth - depth;
-        while (diagonal <= max_depth + depth) : (diagonal += 2) {
-            const should_go_right =
-                // "Most right" diagonal (top bound); diagonal is to the
-                // right of current position, so we can only go right from here.
-                (diagonal == max_depth + depth or
-                // If we arrive here, we must pick one of two cases (left or right); comparators:
-                // == : left diagonal is closer to bottom right, so pick it (move right)
-                // <  : right diagonal has higher X (move down)
-                // >  : left diagonal has higher X (move right)
-                diagonal_lines_best_xs[diagonal - 1] >= diagonal_lines_best_xs[diagonal + 1]) and
-                // "Most left" diagonal (bottom bound); diagonal is below the
-                // current position, so we can only go down from here.
-                diagonal != max_depth - depth;
-
-            if (should_go_right) {
-                // Going right means that we're increasing X by one with our move originating
-                // from the left and heading to our current diagonal. Thus, we need to copy
-                // the diagonal to the left os us' X, which is diagonal - 1, and then add 1 to it.
-                diagonal_lines_best_xs[diagonal] = diagonal_lines_best_xs[diagonal - 1] + 1;
-            } else {
-                // Going down means that we're keeping the X the same with our move originating
-                // from above and heading to our current diagonal. Thus, we need to copy the
-                // diagonal above us' X, which is diagonal + 1.
-                diagonal_lines_best_xs[diagonal] = diagonal_lines_best_xs[diagonal + 1];
-            }
-
-            // Extract x and y from formula `diagonal = x - y`
-            var x = diagonal_lines_best_xs[diagonal];
-            var y = x + max_depth - diagonal;
-
-            // Follow any snakes
-            while (x < a.len and y < b.len and a[x] == b[y]) {
-                x += 1;
-                y += 1;
-                diagonal_lines_best_xs[diagonal] = x;
-            }
-
-            // Are we at the bottom right corner?
-            if (x >= a.len and y >= b.len) return depth;
+/// Context must contain:
+///   - fn eql(context: Context, a: T, b: T) bool
+pub fn SesFinder(comptime T: type, comptime Context: type) type {
+    return struct {
+        // Caller asserts that the scratch buffer `diagonal_lines_best_xs` must be at least (2 * (a.len + b.len) + 1) long
+        // Caller asserts that a and b are not both of length 0
+        pub fn calculateLength(
+            a: []const T,
+            b: []const T,
+            diagonal_lines_best_xs: []usize,
+        ) usize {
+            if (std.meta.fields(Context).len != 0) @compileError("You must call `calculateLengthContext`.");
+            return calculateLengthContext(a, b, diagonal_lines_best_xs, .{});
         }
-    }
 
-    unreachable;
+        // Caller asserts that the scratch buffer `diagonal_lines_best_xs` must be at least (2 * (a.len + b.len) + 1) long
+        // Caller asserts that a and b are not both of length 0
+        pub fn calculateLengthContext(
+            a: []const T,
+            b: []const T,
+            diagonal_lines_best_xs: []usize,
+            context: Context,
+        ) usize {
+            std.debug.assert(a.len != 0 or b.len != 0);
+
+            const max_depth = a.len + b.len;
+            // Number of diagonals, both positive or negative (some are off the board)
+            const required_scratch_len = 2 * max_depth + 1;
+            // -max_depth ... max_depth (0 is included, which is why the + 1 is present)
+            std.debug.assert(diagonal_lines_best_xs.len >= required_scratch_len);
+
+            if (std.debug.runtime_safety) {
+                @memset(diagonal_lines_best_xs[0..required_scratch_len], undefined);
+            }
+
+            // Zig does not have signed indices for slices, so we just used unsigned integers
+            // For example, if max_depth = 2 and I want to get diagonal_lines_best_xs[-1], I would
+            // do diagonal_lines_best_xs[max_depth - 1], and likewise if I want diagonal_lines_best_xs[1]
+            // I would do diagonal_lines_best_xs[max_depth + 1].
+
+            // Called to create valid case for first move which is off the board.
+            diagonal_lines_best_xs[max_depth + 1] = 0;
+
+            // Our long-term objective is for whatever move we perform
+            // to move towards the bottom right of the board. Our short-term
+            // objective is for every move to move towards the current diagonal.
+
+            for (0..max_depth + 1) |depth| {
+                // -max_depth, -max_depth + 2 ... max_depth - 2, max_depth
+                var diagonal: usize = max_depth - depth;
+                while (diagonal <= max_depth + depth) : (diagonal += 2) {
+                    const should_go_right =
+                        // "Most right" diagonal (top bound); diagonal is to the
+                        // right of current position, so we can only go right from here.
+                        (diagonal == max_depth + depth or
+                        // If we arrive here, we must pick one of two cases (left or right); comparators:
+                        // == : left diagonal is closer to bottom right, so pick it (move right)
+                        // <  : right diagonal has higher X (move down)
+                        // >  : left diagonal has higher X (move right)
+                        diagonal_lines_best_xs[diagonal - 1] >= diagonal_lines_best_xs[diagonal + 1]) and
+                        // "Most left" diagonal (bottom bound); diagonal is below the
+                        // current position, so we can only go down from here.
+                        diagonal != max_depth - depth;
+
+                    if (should_go_right) {
+                        // Going right means that we're increasing X by one with our move originating
+                        // from the left and heading to our current diagonal. Thus, we need to copy
+                        // the diagonal to the left os us' X, which is diagonal - 1, and then add 1 to it.
+                        diagonal_lines_best_xs[diagonal] = diagonal_lines_best_xs[diagonal - 1] + 1;
+                    } else {
+                        // Going down means that we're keeping the X the same with our move originating
+                        // from above and heading to our current diagonal. Thus, we need to copy the
+                        // diagonal above us' X, which is diagonal + 1.
+                        diagonal_lines_best_xs[diagonal] = diagonal_lines_best_xs[diagonal + 1];
+                    }
+
+                    // Extract x and y from formula `diagonal = x - y`
+                    var x = diagonal_lines_best_xs[diagonal];
+                    var y = x + max_depth - diagonal;
+
+                    // Follow any snakes
+                    while (x < a.len and y < b.len and context.eql(a[x], b[y])) {
+                        x += 1;
+                        y += 1;
+                        diagonal_lines_best_xs[diagonal] = x;
+                    }
+
+                    // Are we at the bottom right corner?
+                    if (x >= a.len and y >= b.len) return depth;
+                }
+            }
+
+            unreachable;
+        }
+    };
+}
+
+/// Use this for values that can be compared
+/// with a simple ==.
+pub fn PrimitiveSesFinder(comptime T: type) type {
+    const Context = struct {
+        inline fn eql(context: @This(), a: T, b: T) bool {
+            _ = context;
+            return a == b;
+        }
+    };
+
+    return SesFinder(T, Context);
 }
 
 pub fn main() !void {
@@ -99,11 +129,31 @@ pub fn main() !void {
         }
     }
 
+    const Sum = struct { a: u8, b: u8 };
+
+    const sum_a = [_]Sum{ .{ .a = 1, .b = 2 }, .{ .a = 2, .b = 1 }, .{ .a = 3, .b = 4 } };
+    const sum_b = [_]Sum{ .{ .a = 1, .b = 2 }, .{ .a = 1, .b = 1 }, .{ .a = 0, .b = 2 } };
+
+    const SumContext = struct {
+        fn eql(context: @This(), a: Sum, b: Sum) bool {
+            _ = context;
+            return a.a + a.b == b.a + b.b;
+        }
+    };
+
     var timer = try std.time.Timer.start();
 
-    const a = calculateShortestEditDistance(u8, &str_a, &str_b, &scratch_buf);
+    const a = PrimitiveSesFinder(u8).calculateLength(&str_a, &str_b, &scratch_buf);
     const a_time = timer.lap();
 
+    const b = SesFinder(Sum, SumContext).calculateLength(&sum_a, &sum_b, &scratch_buf);
+    const b_time = timer.lap();
+
+    std.debug.print("a\n", .{});
     std.debug.print("{d}\n", .{a});
     std.debug.print("{d}ns == {d}ms\n", .{ a_time, @as(f32, @floatFromInt(a_time)) / @as(f32, @floatFromInt(std.time.ns_per_ms)) });
+
+    std.debug.print("\nb\n", .{});
+    std.debug.print("{d}\n", .{b});
+    std.debug.print("{d}ns == {d}ms\n", .{ b_time, @as(f32, @floatFromInt(b_time)) / @as(f32, @floatFromInt(std.time.ns_per_ms)) });
 }
