@@ -16,29 +16,19 @@ pub const Edit = struct {
 };
 
 /// Context must contain:
-///   - fn eql(context: Context, a: T, b: T) bool
-pub fn SesFinder(comptime T: type, comptime Context: type) type {
+///   - fn eql(context: Context, a_index: u32, b_index: u32) bool
+pub fn Differ(comptime Context: type) type {
     return struct {
         /// Caller asserts that the scratch buffer `diagonal_lines_best_xs` must be at least (2 * (a.len + b.len) + 1) long
-        pub fn calculateLength(
-            a: []const T,
-            b: []const T,
-            diagonal_lines_best_xs: []u32,
-        ) u32 {
-            if (std.meta.fields(Context).len != 0) @compileError("You must call `calculateLengthContext`.");
-            return calculateLengthContext(a, b, diagonal_lines_best_xs, .{});
-        }
-
-        /// Caller asserts that the scratch buffer `diagonal_lines_best_xs` must be at least (2 * (a.len + b.len) + 1) long
-        pub fn calculateLengthContext(
-            a: []const T,
-            b: []const T,
+        pub fn calculateSesLength(
+            a_len: u32,
+            b_len: u32,
             diagonal_lines_best_xs: []u32,
             context: Context,
         ) u32 {
-            if (a.len == 0 and b.len == 0) return 0;
+            if (a_len == 0 and b_len == 0) return 0;
 
-            const max_depth: u32 = @intCast(a.len + b.len);
+            const max_depth: u32 = @intCast(a_len + b_len);
             // Number of diagonals, both positive or negative (some are off the board)
             const required_scratch_len: u32 = 2 * max_depth + 1;
             // -max_depth ... max_depth (0 is included, which is why the + 1 is present)
@@ -91,14 +81,14 @@ pub fn SesFinder(comptime T: type, comptime Context: type) type {
                     var y = x + max_depth - diagonal;
 
                     // Follow any snakes
-                    while (x < a.len and y < b.len and context.eql(a[x], b[y])) {
+                    while (x < a_len and y < b_len and context.eql(x, y)) {
                         x += 1;
                         y += 1;
                         diagonal_lines_best_xs[diagonal] = x;
                     }
 
                     // Are we at the bottom right corner?
-                    if (x >= a.len and y >= b.len) return depth;
+                    if (x >= a_len and y >= b_len) return depth;
                 }
             }
 
@@ -106,34 +96,23 @@ pub fn SesFinder(comptime T: type, comptime Context: type) type {
         }
 
         /// Caller asserts that the scratch buffer `diagonal_lines_best_xs` must be at least (2 * (a.len + b.len) + 1) long
-        /// Result should be identical to `calculateLength`
-        pub fn calculateReverseLength(
-            a: []const T,
-            b: []const T,
-            diagonal_lines_best_xs: []u32,
-        ) u32 {
-            if (std.meta.fields(Context).len != 0) @compileError("You must call `calculateReverseLengthContext`.");
-            return calculateReverseLengthContext(a, b, diagonal_lines_best_xs, .{});
-        }
-
-        /// Caller asserts that the scratch buffer `diagonal_lines_best_xs` must be at least (2 * (a.len + b.len) + 1) long
         /// Result should be identical to `calculateLengthContext`
-        pub fn calculateReverseLengthContext(
-            a: []const T,
-            b: []const T,
+        pub fn calculateReverseSesLength(
+            a_len: u32,
+            b_len: u32,
             diagonal_lines_best_xs: []u32,
             context: Context,
         ) u32 {
-            if (a.len == 0 and b.len == 0) return 0;
+            if (a_len == 0 and b_len == 0) return 0;
 
-            const max_depth: u32 = @intCast(a.len + b.len);
+            const max_depth: u32 = @intCast(a_len + b_len);
             // Number of diagonals, both positive or negative (some are off the board)
             const required_scratch_len: u32 = 2 * max_depth + 1;
             // -max_depth ... max_depth (0 is included, which is why the + 1 is present)
             std.debug.assert(diagonal_lines_best_xs.len >= required_scratch_len);
 
             // Called to create valid case for first move which is off the board.
-            diagonal_lines_best_xs[max_depth - 1] = @intCast(a.len);
+            diagonal_lines_best_xs[max_depth - 1] = @intCast(a_len);
 
             var depth: u32 = 0;
             while (depth <= max_depth) : (depth += 1) {
@@ -168,12 +147,12 @@ pub fn SesFinder(comptime T: type, comptime Context: type) type {
 
                     // Extract x and y from formula `diagonal = x - y - (a - b)`
                     var x = diagonal_lines_best_xs[diagonal];
-                    var y = @as(i64, @intCast(x + max_depth + b.len)) - @as(i64, @intCast(diagonal + a.len));
+                    var y = @as(i64, @intCast(x + max_depth + b_len)) - @as(i64, @intCast(diagonal + a_len));
 
                     // Follow any snakes
                     // Note the x - 1 and y - 1; if we don't subtract, we're looking
                     // at the wrong snake
-                    while (x > 0 and y > 0 and context.eql(a[x - 1], b[@intCast(y - 1)])) {
+                    while (x > 0 and y > 0 and context.eql(x - 1, @intCast(y - 1))) {
                         x -= 1;
                         y -= 1;
                         diagonal_lines_best_xs[diagonal] = x;
@@ -188,128 +167,116 @@ pub fn SesFinder(comptime T: type, comptime Context: type) type {
         }
 
         /// Caller asserts that the scratch buffer `diagonal_lines_best_xs` must be at least (4 * (a.len + b.len) + 2) long
-        pub fn compute(
+        pub fn diff(
             allocator: std.mem.Allocator,
             edits: *std.ArrayListUnmanaged(Edit),
-            a: []const T,
-            b: []const T,
-            diagonal_lines_best_xs: []u32,
-        ) error{OutOfMemory}!void {
-            if (std.meta.fields(Context).len != 0) @compileError("You must call `computeContext`.");
-            return computeContext(allocator, edits, a, b, diagonal_lines_best_xs, .{});
-        }
-
-        pub fn computeContext(
-            allocator: std.mem.Allocator,
-            edits: *std.ArrayListUnmanaged(Edit),
-            a: []const T,
-            b: []const T,
+            a_len: u32,
+            b_len: u32,
             diagonal_lines_best_xs: []u32,
             context: Context,
         ) error{OutOfMemory}!void {
-            try computeContextInternal(allocator, edits, a, b, diagonal_lines_best_xs, context, 0, 0);
+            try diffInternal(allocator, edits, a_len, b_len, diagonal_lines_best_xs, context, 0, 0);
         }
 
-        pub fn computeContextInternal(
+        pub fn diffInternal(
             allocator: std.mem.Allocator,
             edits: *std.ArrayListUnmanaged(Edit),
-            a: []const T,
-            b: []const T,
+            a_len: u32,
+            b_len: u32,
             diagonal_lines_best_xs: []u32,
             context: Context,
             a_offset_from_start: u32,
             b_offset_from_start: u32,
         ) error{OutOfMemory}!void {
             // Skip equals at front
-            var start: u32 = 0;
-            while (start < a.len and
-                start < b.len and
-                context.eql(a[start], b[start]))
+            var start_offset: u32 = 0;
+            while (start_offset < a_len and
+                start_offset < b_len and
+                context.eql(a_offset_from_start + start_offset, b_offset_from_start + start_offset))
             {
-                start += 1;
+                start_offset += 1;
             }
 
-            if (start != 0) {
+            if (start_offset != 0) {
                 try edits.append(allocator, .{
                     .kind = .equal,
                     .range = .{
                         .start = a_offset_from_start,
-                        .end = a_offset_from_start + start,
+                        .end = a_offset_from_start + start_offset,
                     },
                 });
             }
 
-            var a_sliced = a[start..];
-            var b_sliced = b[start..];
-
             // Skip equals in back
             var end_offset: u32 = 0;
-            while (a_sliced.len > end_offset and
-                b_sliced.len > end_offset and
-                context.eql(a_sliced[a_sliced.len - end_offset - 1], b_sliced[b_sliced.len - end_offset - 1]))
+            while (a_len - start_offset > end_offset and
+                b_len - start_offset > end_offset and
+                context.eql(a_offset_from_start + a_len - end_offset - 1, b_offset_from_start + b_len - end_offset - 1))
             {
                 end_offset += 1;
             }
 
-            a_sliced = a_sliced[0 .. a_sliced.len - end_offset];
-            b_sliced = b_sliced[0 .. b_sliced.len - end_offset];
+            const a_sliced_len = a_len - start_offset - end_offset;
+            const b_sliced_len = b_len - start_offset - end_offset;
 
-            if (a_sliced.len > 0 and b_sliced.len > 0) {
+            if (a_sliced_len > 0 and b_sliced_len > 0) {
                 const bounds = try computeMiddleSnake(
-                    a_sliced,
-                    b_sliced,
+                    a_offset_from_start + start_offset,
+                    b_offset_from_start + start_offset,
+                    a_sliced_len,
+                    b_sliced_len,
                     diagonal_lines_best_xs,
                     context,
                 );
 
                 // Both have chars; more middle snakes to be found!
-                try computeContextInternal(
+                try diffInternal(
                     allocator,
                     edits,
-                    a_sliced[0..bounds.x1],
-                    b_sliced[0..bounds.y1],
+                    bounds.x1,
+                    bounds.y1,
                     diagonal_lines_best_xs,
                     context,
-                    a_offset_from_start + start,
-                    b_offset_from_start + start,
+                    a_offset_from_start + start_offset,
+                    b_offset_from_start + start_offset,
                 );
 
                 if (bounds.x1 != bounds.x2) {
                     try edits.append(allocator, .{
                         .kind = .equal,
                         .range = .{
-                            .start = a_offset_from_start + start + bounds.x1,
-                            .end = a_offset_from_start + start + bounds.x2,
+                            .start = a_offset_from_start + start_offset + bounds.x1,
+                            .end = a_offset_from_start + start_offset + bounds.x2,
                         },
                     });
                 }
 
-                try computeContextInternal(
+                try diffInternal(
                     allocator,
                     edits,
-                    a_sliced[bounds.x2..],
-                    b_sliced[bounds.y2..],
+                    a_sliced_len - bounds.x2,
+                    b_sliced_len - bounds.y2,
                     diagonal_lines_best_xs,
                     context,
-                    a_offset_from_start + start + bounds.x2,
-                    b_offset_from_start + start + bounds.y2,
+                    a_offset_from_start + start_offset + bounds.x2,
+                    b_offset_from_start + start_offset + bounds.y2,
                 );
-            } else if (a_sliced.len > 0) {
+            } else if (a_sliced_len > 0) {
                 // a has chars, b has none; we must delete from a to match b
                 try edits.append(allocator, .{
                     .kind = .delete,
                     .range = .{
-                        .start = a_offset_from_start,
-                        .end = @intCast(a_offset_from_start + a_sliced.len),
+                        .start = a_offset_from_start + start_offset,
+                        .end = @intCast(a_offset_from_start + a_len - end_offset),
                     },
                 });
-            } else if (b_sliced.len > 0) {
+            } else if (b_sliced_len > 0) {
                 // b has chars, a has none; we must insert from b
                 try edits.append(allocator, .{
                     .kind = .insert,
                     .range = .{
-                        .start = b_offset_from_start,
-                        .end = @intCast(b_offset_from_start + b_sliced.len),
+                        .start = b_offset_from_start + start_offset,
+                        .end = @intCast(b_offset_from_start + b_len - end_offset),
                     },
                 });
             }
@@ -318,8 +285,8 @@ pub fn SesFinder(comptime T: type, comptime Context: type) type {
                 try edits.append(allocator, .{
                     .kind = .equal,
                     .range = .{
-                        .start = a_offset_from_start + @as(u32, @intCast(a.len)) - end_offset,
-                        .end = a_offset_from_start + @as(u32, @intCast(a.len)),
+                        .start = a_offset_from_start + @as(u32, @intCast(a_len)) - end_offset,
+                        .end = a_offset_from_start + @as(u32, @intCast(a_len)),
                     },
                 });
             }
@@ -328,12 +295,14 @@ pub fn SesFinder(comptime T: type, comptime Context: type) type {
         pub const MiddleSnakeBounds = struct { x1: u32, y1: u32, x2: u32, y2: u32 };
 
         fn computeMiddleSnake(
-            a: []const T,
-            b: []const T,
+            a_offset_from_start: u32,
+            b_offset_from_start: u32,
+            a_len: u32,
+            b_len: u32,
             diagonal_lines_best_xs: []u32,
             context: Context,
         ) error{OutOfMemory}!MiddleSnakeBounds {
-            const max_depth: u32 = @intCast(a.len + b.len);
+            const max_depth: u32 = @intCast(a_len + b_len);
             // Number of diagonals for forwards and reverse, both positive or negative (some are off the board)
             const required_scratch_len: u32 = 2 * max_depth + 1;
             // -max_depth ... max_depth (0 is included, which is why the + 1 is present) x2
@@ -343,13 +312,13 @@ pub fn SesFinder(comptime T: type, comptime Context: type) type {
             forward_diagonal_best_xs[max_depth + 1] = 0;
 
             const backward_diagonal_best_xs = diagonal_lines_best_xs[0..required_scratch_len];
-            backward_diagonal_best_xs[max_depth - 1] = @intCast(a.len);
+            backward_diagonal_best_xs[max_depth - 1] = @intCast(a_len);
 
-            const delta = @as(i64, @intCast(a.len)) - @as(i64, @intCast(b.len));
+            const delta = @as(i64, @intCast(a_len)) - @as(i64, @intCast(b_len));
             const is_delta_even = @rem(delta, 2) == 0;
 
             var depth: u32 = 0;
-            while (depth <= (a.len + b.len + 1) / 2) : (depth += 1) {
+            while (depth <= (a_len + b_len + 1) / 2) : (depth += 1) {
                 var diagonal: u32 = max_depth - depth;
                 while (diagonal <= max_depth + depth) : (diagonal += 2) {
                     const should_go_right =
@@ -366,7 +335,7 @@ pub fn SesFinder(comptime T: type, comptime Context: type) type {
                     var x = forward_diagonal_best_xs[diagonal];
                     var y = x + max_depth - diagonal;
 
-                    while (x < a.len and y < b.len and context.eql(a[x], b[y])) {
+                    while (x < a_len and y < b_len and context.eql(a_offset_from_start + x, b_offset_from_start + y)) {
                         x += 1;
                         y += 1;
                         forward_diagonal_best_xs[diagonal] = x;
@@ -405,7 +374,7 @@ pub fn SesFinder(comptime T: type, comptime Context: type) type {
                     var x = backward_diagonal_best_xs[diagonal];
                     var y = @as(i64, @intCast(x + max_depth)) - @as(i64, @intCast(diagonal)) - delta;
 
-                    while (x > 0 and y > 0 and context.eql(a[x - 1], b[@intCast(y - 1)])) {
+                    while (x > 0 and y > 0 and context.eql(a_offset_from_start + x - 1, @intCast(b_offset_from_start + y - 1))) {
                         x -= 1;
                         y -= 1;
                         backward_diagonal_best_xs[diagonal] = x;
@@ -434,17 +403,117 @@ pub fn SesFinder(comptime T: type, comptime Context: type) type {
     };
 }
 
-/// Use this for values that can be compared
-/// with a simple ==.
-pub fn PrimitiveSesFinder(comptime T: type) type {
-    const Context = struct {
+/// Context must contain:
+///   - fn eql(context: Context, a: T, b: T) bool
+pub fn SliceDiffer(comptime T: type, comptime Context: type) type {
+    const SliceContext = struct {
+        a: []const T,
+        b: []const T,
+        context: Context,
+
+        inline fn eql(context: @This(), a_index: u32, b_index: u32) bool {
+            return context.context.eql(context.a[a_index], context.b[b_index]);
+        }
+    };
+
+    return struct {
+        const DifferImpl = Differ(SliceContext);
+
+        /// Number of characters inserted and deleted
+        /// Caller asserts that the scratch buffer `diagonal_lines_best_xs` must be at least (2 * (a.len + b.len) + 1) long
+        pub fn calculateSesLength(a: []const T, b: []const T, diagonal_lines_best_xs: []u32) u32 {
+            return calculateSesLengthContext(a, b, diagonal_lines_best_xs, .{});
+        }
+
+        /// Number of characters inserted and deleted
+        /// Caller asserts that the scratch buffer `diagonal_lines_best_xs` must be at least (2 * (a.len + b.len) + 1) long
+        pub fn calculateSesLengthContext(
+            a: []const T,
+            b: []const T,
+            diagonal_lines_best_xs: []u32,
+            context: Context,
+        ) u32 {
+            return DifferImpl.calculateSesLength(
+                @intCast(a.len),
+                @intCast(b.len),
+                diagonal_lines_best_xs,
+                .{
+                    .a = a,
+                    .b = b,
+                    .context = context,
+                },
+            );
+        }
+
+        /// Number of characters inserted and deleted
+        /// Caller asserts that the scratch buffer `diagonal_lines_best_xs` must be at least (2 * (a.len + b.len) + 1) long
+        pub fn calculateReverseSesLength(a: []const T, b: []const T, diagonal_lines_best_xs: []u32) u32 {
+            return calculateReverseSesLengthContext(a, b, diagonal_lines_best_xs, .{});
+        }
+
+        /// Number of characters inserted and deleted
+        /// Caller asserts that the scratch buffer `diagonal_lines_best_xs` must be at least (2 * (a.len + b.len) + 1) long
+        pub fn calculateReverseSesLengthContext(
+            a: []const T,
+            b: []const T,
+            diagonal_lines_best_xs: []u32,
+            context: Context,
+        ) u32 {
+            return DifferImpl.calculateReverseSesLength(
+                @intCast(a.len),
+                @intCast(b.len),
+                diagonal_lines_best_xs,
+                .{
+                    .a = a,
+                    .b = b,
+                    .context = context,
+                },
+            );
+        }
+
+        /// Caller asserts that the scratch buffer `diagonal_lines_best_xs` must be at least (2 * (a.len + b.len) + 1) long
+        pub fn diff(
+            allocator: std.mem.Allocator,
+            edits: *std.ArrayListUnmanaged(Edit),
+            a: []const T,
+            b: []const T,
+            diagonal_lines_best_xs: []u32,
+        ) error{OutOfMemory}!void {
+            return diffContext(allocator, edits, a, b, diagonal_lines_best_xs, .{});
+        }
+
+        /// Caller asserts that the scratch buffer `diagonal_lines_best_xs` must be at least (2 * (a.len + b.len) + 1) long
+        pub fn diffContext(
+            allocator: std.mem.Allocator,
+            edits: *std.ArrayListUnmanaged(Edit),
+            a: []const T,
+            b: []const T,
+            diagonal_lines_best_xs: []u32,
+            context: Context,
+        ) error{OutOfMemory}!void {
+            return DifferImpl.diff(
+                allocator,
+                edits,
+                @intCast(a.len),
+                @intCast(b.len),
+                diagonal_lines_best_xs,
+                .{
+                    .a = a,
+                    .b = b,
+                    .context = context,
+                },
+            );
+        }
+    };
+}
+
+pub fn PrimitiveSliceDiffer(comptime T: type) type {
+    return SliceDiffer(T, struct {
         inline fn eql(context: @This(), a: T, b: T) bool {
             _ = context;
             return a == b;
         }
-    };
-
-    return SesFinder(T, Context);
+    });
 }
 
 pub fn main() !void {
@@ -470,31 +539,16 @@ pub fn main() !void {
         }
     }
 
-    const Sum = struct { a: u8, b: u8 };
-
-    const sum_a = [_]Sum{ .{ .a = 1, .b = 2 }, .{ .a = 2, .b = 1 }, .{ .a = 3, .b = 4 } };
-    const sum_b = [_]Sum{ .{ .a = 1, .b = 2 }, .{ .a = 1, .b = 1 }, .{ .a = 0, .b = 2 } };
-
-    const SumContext = struct {
-        fn eql(context: @This(), a: Sum, b: Sum) bool {
-            _ = context;
-            return a.a + a.b == b.a + b.b;
-        }
-    };
-
     var timer = try std.time.Timer.start();
 
-    const a = PrimitiveSesFinder(u8).calculateLength(&str_a, &str_b, &scratch_buf);
+    const a = PrimitiveSliceDiffer(u8).calculateSesLength(&str_a, &str_b, &scratch_buf);
     const a_time = timer.lap();
-    const a_reverse = PrimitiveSesFinder(u8).calculateReverseLength(&str_a, &str_b, &scratch_buf);
+    const a_reverse = PrimitiveSliceDiffer(u8).calculateReverseSesLength(&str_a, &str_b, &scratch_buf);
     const a_reverse_time = timer.lap();
 
     var edits = std.ArrayListUnmanaged(Edit){};
-    try PrimitiveSesFinder(u8).compute(std.heap.page_allocator, &edits, &str_a, &str_b, &scratch_buf);
+    try PrimitiveSliceDiffer(u8).diff(std.heap.page_allocator, &edits, &str_a, &str_b, &scratch_buf);
     const a_compute_time = timer.lap();
-
-    const b = SesFinder(Sum, SumContext).calculateLength(&sum_a, &sum_b, &scratch_buf);
-    const b_time = timer.lap();
 
     std.debug.print("a\n", .{});
     std.debug.print("{d} == {d}\n", .{ a, a_reverse });
@@ -529,8 +583,4 @@ pub fn main() !void {
             },
         }
     }
-
-    std.debug.print("\nb\n", .{});
-    std.debug.print("{d}\n", .{b});
-    std.debug.print("{d}ns == {d}ms\n", .{ b_time, @as(f32, @floatFromInt(b_time)) / @as(f32, @floatFromInt(std.time.ns_per_ms)) });
 }
