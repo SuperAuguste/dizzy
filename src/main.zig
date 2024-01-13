@@ -334,6 +334,8 @@ pub fn Differ(comptime Context: type) type {
 
                     var x = forward_diagonal_best_xs[diagonal];
                     var y = x + max_depth - diagonal;
+                    const x1 = x;
+                    const y1 = y;
 
                     while (x < a_len and y < b_len and context.eql(a_offset_from_start + x, b_offset_from_start + y)) {
                         x += 1;
@@ -349,12 +351,7 @@ pub fn Differ(comptime Context: type) type {
                         // Does it overlap?
                         forward_diagonal_best_xs[diagonal] >= backward_diagonal_best_xs[@intCast(backward_diagonal)])
                     {
-                        return .{
-                            .x1 = backward_diagonal_best_xs[@intCast(backward_diagonal)],
-                            .y1 = @intCast(@as(i64, @intCast(backward_diagonal_best_xs[@intCast(backward_diagonal)] + max_depth)) - backward_diagonal - delta),
-                            .x2 = x,
-                            .y2 = y,
-                        };
+                        return .{ .x1 = x1, .y1 = y1, .x2 = x, .y2 = y };
                     }
                 }
 
@@ -373,6 +370,8 @@ pub fn Differ(comptime Context: type) type {
 
                     var x = backward_diagonal_best_xs[diagonal];
                     var y = @as(i64, @intCast(x + max_depth)) - @as(i64, @intCast(diagonal)) - delta;
+                    const x2 = x;
+                    const y2: u32 = @intCast(y);
 
                     while (x > 0 and y > 0 and context.eql(a_offset_from_start + x - 1, @intCast(b_offset_from_start + y - 1))) {
                         x -= 1;
@@ -388,12 +387,7 @@ pub fn Differ(comptime Context: type) type {
                         // Does it overlap?
                         forward_diagonal_best_xs[forward_diagonal] >= backward_diagonal_best_xs[diagonal])
                     {
-                        return .{
-                            .x1 = x,
-                            .y1 = @intCast(y),
-                            .x2 = forward_diagonal_best_xs[forward_diagonal],
-                            .y2 = forward_diagonal_best_xs[forward_diagonal] + max_depth - forward_diagonal,
-                        };
+                        return .{ .x1 = x, .y1 = @intCast(y), .x2 = x2, .y2 = y2 };
                     }
                 }
             }
