@@ -15,36 +15,36 @@ pub const Edit = struct {
     range: Range,
 };
 
+const DiagonalHelper = struct {
+    max_depth: i32,
+    diagonal_lines_best_xs: []u32,
+
+    pub fn init(a_len: u32, b_len: u32, diagonal_lines_best_xs: []u32) DiagonalHelper {
+        const max_depth: i32 = @intCast(a_len + b_len);
+        // Number of diagonals, both positive or negative (some are off the board)
+        const required_scratch_len: i32 = 2 * max_depth + 1;
+        // -max_depth ... max_depth (0 is included, which is why the + 1 is present)
+        std.debug.assert(diagonal_lines_best_xs.len >= required_scratch_len);
+
+        return .{
+            .max_depth = max_depth,
+            .diagonal_lines_best_xs = diagonal_lines_best_xs,
+        };
+    }
+
+    pub fn getBestX(helper: *DiagonalHelper, diagonal: i32) u32 {
+        return helper.diagonal_lines_best_xs[@intCast(helper.max_depth + diagonal)];
+    }
+
+    pub fn setBestX(helper: *DiagonalHelper, diagonal: i32, value: u32) void {
+        helper.diagonal_lines_best_xs[@intCast(helper.max_depth + diagonal)] = value;
+    }
+};
+
 /// Context must contain:
 ///   - fn eql(context: Context, a_index: u32, b_index: u32) bool
 pub fn Differ(comptime Context: type) type {
     return struct {
-        const DiagonalHelper = struct {
-            max_depth: i32,
-            diagonal_lines_best_xs: []u32,
-
-            pub fn init(a_len: u32, b_len: u32, diagonal_lines_best_xs: []u32) DiagonalHelper {
-                const max_depth: i32 = @intCast(a_len + b_len);
-                // Number of diagonals, both positive or negative (some are off the board)
-                const required_scratch_len: i32 = 2 * max_depth + 1;
-                // -max_depth ... max_depth (0 is included, which is why the + 1 is present)
-                std.debug.assert(diagonal_lines_best_xs.len >= required_scratch_len);
-
-                return .{
-                    .max_depth = max_depth,
-                    .diagonal_lines_best_xs = diagonal_lines_best_xs,
-                };
-            }
-
-            pub fn getBestX(helper: *DiagonalHelper, diagonal: i32) u32 {
-                return helper.diagonal_lines_best_xs[@intCast(helper.max_depth + diagonal)];
-            }
-
-            pub fn setBestX(helper: *DiagonalHelper, diagonal: i32, value: u32) void {
-                helper.diagonal_lines_best_xs[@intCast(helper.max_depth + diagonal)] = value;
-            }
-        };
-
         /// Caller asserts that the scratch buffer `diagonal_lines_best_xs` must be at least `(2 * (a.len + b.len) + 1)` long
         pub fn calculateSesLength(
             a_len: u32,
@@ -195,7 +195,7 @@ pub fn Differ(comptime Context: type) type {
             try diffInternal(allocator, edits, a_len, b_len, diagonal_lines_best_xs, context, 0, 0);
         }
 
-        pub fn diffInternal(
+        fn diffInternal(
             allocator: std.mem.Allocator,
             edits: *std.ArrayListUnmanaged(Edit),
             a_len: u32,
@@ -309,7 +309,7 @@ pub fn Differ(comptime Context: type) type {
             }
         }
 
-        pub const MiddleSnakeBounds = struct {
+        const MiddleSnakeBounds = struct {
             x1: u32,
             y1: u32,
             x2: u32,
