@@ -1,10 +1,8 @@
-# dizzy WIP
+# dizzy
 
 Zig diffing from the ground up with Myers' algorithm for discovering shortest edit scripts.
 
-## Mental Model for Myers Diff
-
-Draw a diagonal line on matrix. As depth D increases, draw D diagonal lines on each depth iteration. Always move towards the line. Prioritize rightward movement for deletions, and downward for insertions.
+Allows diffing of any set of values (even non-slice ones) as long as those values are `eql`able by index.
 
 ## Resources
 
