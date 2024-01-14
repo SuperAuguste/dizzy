@@ -233,12 +233,8 @@ pub fn Differ(comptime Context: type) type {
                 end_offset += 1;
             }
 
-            std.debug.print("{d}+{d} | {d}+{d}\n", .{ a_offset_from_start, start_offset, b_offset_from_start, start_offset });
-
             const a_sliced_len = a_len - start_offset - end_offset;
             const b_sliced_len = b_len - start_offset - end_offset;
-
-            std.debug.print("{d}->{d} | {d}->{d}\n", .{ a_len, a_sliced_len, b_len, b_sliced_len });
 
             if (a_sliced_len > 0 and b_sliced_len > 0) {
                 const bounds = try computeMiddleSnake(
@@ -249,8 +245,6 @@ pub fn Differ(comptime Context: type) type {
                     diagonal_lines_best_xs,
                     context,
                 );
-
-                std.debug.print("{any}\n", .{bounds});
 
                 // Both have chars; more middle snakes to be found!
                 try diffInternal(
@@ -365,6 +359,8 @@ pub fn Differ(comptime Context: type) type {
 
                     var x: i32 = @intCast(forward_diagonals.getBestX(diagonal));
                     var y = x - diagonal;
+                    const x1 = x;
+                    const y1 = y;
 
                     while (x < a_len and y < b_len and context.eql(a_offset_from_start + @as(u32, @intCast(x)), b_offset_from_start + @as(u32, @intCast(y)))) {
                         x += 1;
@@ -381,8 +377,8 @@ pub fn Differ(comptime Context: type) type {
                         forward_diagonals.getBestX(diagonal) >= backward_diagonals.getBestX(@intCast(backward_diagonal)))
                     {
                         return .{
-                            .x1 = backward_diagonals.getBestX(@intCast(backward_diagonal)),
-                            .y1 = @intCast(@as(i32, @intCast(backward_diagonals.getBestX(@intCast(backward_diagonal)))) - diagonal - delta),
+                            .x1 = @intCast(x1),
+                            .y1 = @intCast(y1),
                             .x2 = @intCast(x),
                             .y2 = @intCast(y),
                             .ses_len = @intCast(2 * depth - 1),
@@ -405,6 +401,8 @@ pub fn Differ(comptime Context: type) type {
 
                     var x: i32 = @intCast(backward_diagonals.getBestX(diagonal));
                     var y = x - diagonal - delta;
+                    const x2 = x;
+                    const y2 = y;
 
                     while (x > 0 and y > 0 and context.eql(a_offset_from_start + @as(u32, @intCast(x)) - 1, b_offset_from_start + @as(u32, @intCast(y)) - 1)) {
                         x -= 1;
@@ -423,8 +421,8 @@ pub fn Differ(comptime Context: type) type {
                         return .{
                             .x1 = @intCast(x),
                             .y1 = @intCast(y),
-                            .x2 = forward_diagonals.getBestX(@intCast(forward_diagonal)),
-                            .y2 = @intCast(@as(i32, @intCast(forward_diagonals.getBestX(@intCast(forward_diagonal)))) - forward_diagonal),
+                            .x2 = @intCast(x2),
+                            .y2 = @intCast(y2),
                             .ses_len = @intCast(2 * depth),
                         };
                     }
@@ -549,42 +547,7 @@ pub fn PrimitiveSliceDiffer(comptime T: type) type {
     });
 }
 
-test "aaa" {
-    // if (1 == 1) return;
-
-    const allocator = std.testing.allocator;
-
-    const a = "!";
-    const b = "a!b!c";
-
-    var scratch: [4 * (a.len + b.len) + 2]u32 = undefined;
-    var edits = std.ArrayListUnmanaged(Edit){};
-    defer edits.deinit(allocator);
-    var diffed_b = std.ArrayListUnmanaged(u8){};
-    defer diffed_b.deinit(allocator);
-
-    try PrimitiveSliceDiffer(u8).diff(allocator, &edits, a, b, &scratch);
-
-    std.debug.print("{any}\n", .{edits.items});
-
-    for (edits.items) |edit| {
-        switch (edit.kind) {
-            .equal => {
-                try diffed_b.appendSlice(allocator, a[edit.range.start..edit.range.end]);
-            },
-            .insert => {
-                try diffed_b.appendSlice(allocator, b[edit.range.start..edit.range.end]);
-            },
-            .delete => {},
-        }
-    }
-
-    try std.testing.expectEqualSlices(u8, b, diffed_b.items);
-}
-
 test {
-    if (1 == 1) return;
-
     const allocator = std.testing.allocator;
 
     var rng = std.rand.DefaultPrng.init(0);
@@ -645,8 +608,6 @@ test {
             }
 
             try std.testing.expectEqual(ses_len, actual_ses_len);
-            // std.log.err("\"{}\"", .{std.zig.fmtEscapes(a.items)});
-            // std.log.err("\"{}\"", .{std.zig.fmtEscapes(b.items)});
             try std.testing.expectEqualSlices(u8, b.items, diffed_b.items);
         }
     }
