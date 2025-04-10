@@ -77,11 +77,11 @@ pub fn Differ(comptime Context: type) type {
                         // "Most right" diagonal (top bound); diagonal is to the
                         // right of current position, so we can only go right from here.
                         (diagonal == depth or
-                        // If we arrive here, we must pick one of two cases (left or right); comparators:
-                        // == : left diagonal is closer to bottom right, so pick it (move right)
-                        // <  : right diagonal has higher X (move down)
-                        // >  : left diagonal has higher X (move right)
-                        diagonals.getBestX(diagonal - 1) >= diagonals.getBestX(diagonal + 1));
+                            // If we arrive here, we must pick one of two cases (left or right); comparators:
+                            // == : left diagonal is closer to bottom right, so pick it (move right)
+                            // <  : right diagonal has higher X (move down)
+                            // >  : left diagonal has higher X (move right)
+                            diagonals.getBestX(diagonal - 1) >= diagonals.getBestX(diagonal + 1));
 
                     if (should_go_right) {
                         // Going right means that we're increasing X by one with our move originating
@@ -143,11 +143,11 @@ pub fn Differ(comptime Context: type) type {
                         // "Most right" diagonal (top bound); diagonal is to the
                         // right of current position, so we can only go left from here.
                         (diagonal == -depth or
-                        // If we arrive here, we must pick one of two cases (left or right); comparators:
-                        // == : right diagonal is closer to top left, so pick it (move left)
-                        // <  : left diagonal has lower X (move up)
-                        // >  : right diagonal has lower X (move left)
-                        diagonals.getBestX(diagonal - 1) >= diagonals.getBestX(diagonal + 1));
+                            // If we arrive here, we must pick one of two cases (left or right); comparators:
+                            // == : right diagonal is closer to top left, so pick it (move left)
+                            // <  : left diagonal has lower X (move up)
+                            // >  : right diagonal has lower X (move left)
+                            diagonals.getBestX(diagonal - 1) >= diagonals.getBestX(diagonal + 1));
 
                     if (should_go_left) {
                         // Going left means that we're decreasing X by one with our move originating
@@ -349,7 +349,7 @@ pub fn Differ(comptime Context: type) type {
                     const should_go_right =
                         diagonal != -depth and
                         (diagonal == depth or
-                        forward_diagonals.getBestX(diagonal - 1) >= forward_diagonals.getBestX(diagonal + 1));
+                            forward_diagonals.getBestX(diagonal - 1) >= forward_diagonals.getBestX(diagonal + 1));
 
                     if (should_go_right) {
                         forward_diagonals.setBestX(diagonal, forward_diagonals.getBestX(diagonal - 1) + 1);
@@ -391,7 +391,7 @@ pub fn Differ(comptime Context: type) type {
                     const should_go_left =
                         diagonal != depth and
                         (diagonal == -depth or
-                        backward_diagonals.getBestX(diagonal - 1) >= backward_diagonals.getBestX(diagonal + 1));
+                            backward_diagonals.getBestX(diagonal - 1) >= backward_diagonals.getBestX(diagonal + 1));
 
                     if (should_go_left) {
                         backward_diagonals.setBestX(diagonal, backward_diagonals.getBestX(diagonal + 1) -| 1);
@@ -550,7 +550,7 @@ pub fn PrimitiveSliceDiffer(comptime T: type) type {
 test {
     const allocator = std.testing.allocator;
 
-    var rng = std.rand.DefaultPrng.init(0);
+    var rng = std.Random.DefaultPrng.init(0);
     var random = rng.random();
 
     var a = std.ArrayListUnmanaged(u8){};

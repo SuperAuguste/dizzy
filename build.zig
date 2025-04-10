@@ -4,14 +4,14 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    _ = b.addModule("dizzy", .{
-        .root_source_file = .{ .path = "dizzy.zig" },
+    const dizzy = b.addModule("dizzy", .{
+        .root_source_file = b.path("dizzy.zig"),
+        .target = target,
+        .optimize = optimize,
     });
 
     const exe_unit_tests = b.addTest(.{
-        .root_source_file = .{ .path = "dizzy.zig" },
-        .target = target,
-        .optimize = optimize,
+        .root_module = dizzy,
     });
 
     const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);

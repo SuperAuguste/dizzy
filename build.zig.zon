@@ -1,10 +1,16 @@
 .{
-    .name = "dizzy",
+    .name = .dizzy,
+    .fingerprint = 0x49d12b7be1178dab,
     .version = "1.0.0",
+    .minimum_zig_version = "0.14.0",
 
     .dependencies = .{},
 
     .paths = .{
-        "",
+        "dizzy.zig",
+        "build.zig",
+        "build.zig.zon",
+        "README.md",
+        "LICENSE",
     },
 }
