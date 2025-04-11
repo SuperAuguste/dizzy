@@ -4,10 +4,16 @@
     .version = "1.0.0",
     .minimum_zig_version = "0.14.0",
 
-    .dependencies = .{},
+    .dependencies = .{
+        .libfuzzer_kit = .{
+            .url = "git+https://github.com/SuperAuguste/zig-libfuzzer-kit.git#a27221dda33b232e65504766294ea4c7c079c3f0",
+            .hash = "libfuzzer_kit-0.0.0-i7XWVl2PBwC3r18KoW8xTU05KyWEMj6RfBpAXd3CQqt7",
+            .lazy = true,
+        },
+    },
 
     .paths = .{
-        "dizzy.zig",
+        "src",
         "build.zig",
         "build.zig.zon",
         "README.md",
