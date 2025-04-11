@@ -13,7 +13,7 @@
     },
 
     .paths = .{
-        "dizzy.zig",
+        "src",
         "build.zig",
         "build.zig.zon",
         "README.md",
